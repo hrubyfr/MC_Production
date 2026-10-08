@@ -44,6 +44,15 @@ $wCDSmac/WCSim/PMT/PositionFile $wcsimdir/data/mPMT_Position_WCTE_CDS.txt
 $beammac/gps/energy $ParticleKE MeV
 $beammac/gps/direction $ParticleDirx $ParticleDiry $ParticleDirz
 $beammac/gps/position $ParticlePosx $ParticlePosy $ParticlePosz cm
+$realisticBeamMac/mygen/gpsBeamPipeDiameter 12 cm
+$realisticBeamMac/mygen/gpsBeamSigmaX $BeamSigma cm
+$realisticBeamMac/mygen/gpsBeamSigmaY $BeamSigma cm
+$realisticBeamMac/gps/direction 0 0 1
+$realisticBeamMac/gps/pos/type Beam
+$realisticBeamMac/gps/pos/centre 0 -42.47625 $ParticlePosz cm
+$realisticBeamMac/gps/ene/type Gauss
+$realisticBeamMac/gps/ene/mono $ParticleKE MeV
+$realisticBeamMac/gps/ene/sigma $EnergySigma MeV
 $uniformmac/gps/ene/type       Lin
 $uniformmac/gps/ene/intercept  1
 $uniformmac/gps/ene/min        $ParticleKELow MeV
@@ -63,6 +72,8 @@ $comsicsmac/mygen/cosmicsfile $wcsimdir/data/WCTE_cosmics.dat
 /WCSimIO/RootFile $filename
 
 /WCSimIO/SaveRooTracker 0
+$savePrimaryTruthMac/WCSimIO/SavePrimaryParticleTruth true
+$saveAllTruthMac/WCSimIO/SaveAllParticleTruth true
 
 /run/beamOn $nevs
 #exit

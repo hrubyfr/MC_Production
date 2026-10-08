@@ -49,8 +49,11 @@ python3 runSimulation.py [options]
 | `-h` | `--help` | Print help message. |
 | `-p` | `--pid` | Particle name (e.g., `mu-`, `e-`). Default: `mu-`. |
 | `-b` | `--beam` | **Beam Mode**: `KE,WallDistance`. KE in MeV, distance from vertex to blacksheet in cm. |
+| | `--realistic-beam` | **Realistic Beam Mode**: `KE,WallDistance,EnergySigma,BeamSigma` (MeV, cm, MeV, cm). Sets the Gaussian energy spread and equal X/Y beam sigmas; beam-pipe diameter is 12 cm. |
 | `-u` | `--uniform` | **Uniform Mode**: `KE_Low,KE_High`. Random vertices with uniform KE in MeV. |
 | `-m` | `--cosmics` | **Cosmics Mode**: Generate cosmic muon events. |
+| | `--save-primary-truth` | Save primary-particle truth in the WCSim output. |
+| | `--save-all-truth` | Save all-particle truth in the WCSim output. |
 | `-n` | `--nevs` | Number of events per file. Default: 1000. |
 | `-f` | `--nfiles` | Number of files to generate. Default: 100. |
 | `-s` | `--seed` | RNG seed. Default: 20260129. |
@@ -70,18 +73,24 @@ Generates 10 files for 100 MeV muons, 30cm from the wall.
 python3 runSimulation.py -p mu- -b 100,30 -n 1000 -f 10
 ```
 
-**2. Submit jobs to Sukap:**
+**2. Generate a realistic beam with both truth records:**
+The beam uses a 900 MeV nominal kinetic energy, 30 cm wall distance, 19.9 MeV energy sigma, and 3.2 cm transverse beam sigma.
+```bash
+python3 runSimulation.py -p mu- --realistic-beam 900,30,19.9,3.2 --save-primary-truth --save-all-truth -n 1000 -f 10
+```
+
+**3. Submit jobs to Sukap:**
 Requires `SOFTWARE_SANDBOX_DIR` to be set via `setup.sh`.
 ```bash 
 python3 runSimulation.py -p e- -u 10,50 -n 1000 -f 100 -k
 ```
 
-**3. Submit to Cedar:**
+**4. Submit to Cedar:**
 ```bash
 python3 runSimulation.py -m -n 1000 -f 50 -d def-myaccount
 ```
 
-**4. Submit to HTCondor (LXPLUS):** 
+**5. Submit to HTCondor (LXPLUS):**
 ```bash 
 python3 runSimulation.py -p mu+ -b 200,0 -n 1000 -f 20 --condor
 ```

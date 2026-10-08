@@ -3,6 +3,7 @@ import time
 import sys
 import argparse
 import os
+import math
 import subprocess
 import string
 import random
@@ -62,6 +63,13 @@ class SimulationConfig:
         self.wallD = 0.
         self.ParticlePosz = -(self.TankRadius - self.wallD)
 
+        self.useRealisticBeam = False
+        self.EnergySigma = 19.9
+        self.BeamSigma = 3.2
+
+        self.savePrimaryParticleTruth = False
+        self.saveAllParticleTruth = False
+
         self.useUniform = False
         self.ParticleKELow = 0.
         self.ParticleKEHigh = 2000.
@@ -79,7 +87,12 @@ class SimulationConfig:
     def get_config_string(self):
         wCDSstring = "_wCDS" if self.useCDS else ""
         
-        beamstring = "Beam_%.0fMeV_%icm_" % (self.ParticleKE, int(self.wallD)) if self.useBeam else ""
+        if self.useRealisticBeam:
+            beamstring = "RealisticBeam_%gMeV_%gcm_Esigma%gMeV_Bsigma%gcm_" % (
+                self.ParticleKE, self.wallD, self.EnergySigma, self.BeamSigma
+            )
+        else:
+            beamstring = "Beam_%.0fMeV_%icm_" % (self.ParticleKE, int(self.wallD)) if self.useBeam else ""
         
         uniformstring = "Uniform_%.0f_%.0fMeV_" % (self.ParticleKELow, self.ParticleKEHigh) if self.useUniform else ""
         
@@ -88,6 +101,11 @@ class SimulationConfig:
         configString = "%s_%s_%s%s" % (wCDSstring, self.ParticleName, beamstring, uniformstring)
         if self.useCosmics:
             configString = "%s_%s" % (wCDSstring, cosmicsstring)
+
+        if self.savePrimaryParticleTruth:
+            configString += "_PrimaryTruth"
+        if self.saveAllParticleTruth:
+            configString += "_AllParticleTruth"
         
         return configString
 
@@ -129,8 +147,11 @@ class FileGenerator:
         
         wCDSmac = "" if self.cfg.useCDS else "#"
         beammac = "" if self.cfg.useBeam else "#"
+        realisticBeamMac = "" if self.cfg.useRealisticBeam else "#"
         uniformmac = "" if self.cfg.useUniform else "#"
         comsicsmac = "" if self.cfg.useCosmics else "#"
+        savePrimaryTruthMac = "" if self.cfg.savePrimaryParticleTruth else "#"
+        saveAllTruthMac = "" if self.cfg.saveAllParticleTruth else "#"
 
         with open("template/WCTE.mac", 'r') as f:
             macTemplate = string.Template(f.read())
@@ -149,10 +170,15 @@ class FileGenerator:
                     rngseed=macseed, 
                     wCDSmac=wCDSmac, 
                     beammac=beammac,
+                    realisticBeamMac=realisticBeamMac,
                     uniformmac=uniformmac,
                     comsicsmac=comsicsmac,
+                    savePrimaryTruthMac=savePrimaryTruthMac,
+                    saveAllTruthMac=saveAllTruthMac,
                     ParticleName=self.cfg.ParticleName,
                     ParticleKE=self.cfg.ParticleKE,
+                    EnergySigma=self.cfg.EnergySigma,
+                    BeamSigma=self.cfg.BeamSigma,
                     ParticleDirx=self.cfg.ParticleDirx,
                     ParticleDiry=self.cfg.ParticleDiry,
                     ParticleDirz=self.cfg.ParticleDirz,
@@ -554,9 +580,13 @@ def main():
 
     parser = argparse.ArgumentParser(description="Function to create mac, shell and batch job scripts for WCSim, MDT and fiTQun")
     parser.add_argument('-p', '--pid', help='particle name (mu-, e-, etc.)')
-    parser.add_argument('-b', '--beam', help='generate beam with KE in MeV, wallDistance in cm (e.g. 100,0)')
-    parser.add_argument('-u', '--uniform', help='generate random vertices with uniform KE in MeV (e.g. 0,2000)')
-    parser.add_argument('-m', '--cosmics', action='store_true', help='generate cosmic muon events')
+    source_mode = parser.add_mutually_exclusive_group()
+    source_mode.add_argument('-b', '--beam', help='generate beam with KE in MeV, wallDistance in cm (e.g. 100,0)')
+    source_mode.add_argument('--realistic-beam', help='generate a realistic beam: KE,WallDistance,EnergySigma,BeamSigma (MeV,cm,MeV,cm)')
+    source_mode.add_argument('-u', '--uniform', help='generate random vertices with uniform KE in MeV (e.g. 0,2000)')
+    source_mode.add_argument('-m', '--cosmics', action='store_true', help='generate cosmic muon events')
+    parser.add_argument('--save-primary-truth', action='store_true', help='save primary-particle truth')
+    parser.add_argument('--save-all-truth', action='store_true', help='save all-particle truth')
     parser.add_argument('-n', '--nevs', type=int, help='number of events per file')
     parser.add_argument('-f', '--nfiles', type=int, help='number of files to be generated')
     parser.add_argument('-s', '--seed', type=int, help='RNG seed used in this script')
@@ -581,6 +611,27 @@ def main():
         config.ParticleKE = float(vals[0])
         config.wallD = float(vals[1])
         config.ParticlePosz = -(config.TankRadius - config.wallD)
+    if args.realistic_beam:
+        vals = args.realistic_beam.split(',')
+        if len(vals) != 4:
+            parser.error('--realistic-beam requires KE,WallDistance,EnergySigma,BeamSigma')
+        try:
+            energy, wall_distance, energy_sigma, beam_sigma = (float(value) for value in vals)
+        except ValueError:
+            parser.error('--realistic-beam values must be numbers')
+        if not all(math.isfinite(value) for value in (energy, wall_distance, energy_sigma, beam_sigma)):
+            parser.error('--realistic-beam values must be finite numbers')
+        if energy < 0 or energy_sigma <= 0 or beam_sigma <= 0:
+            parser.error('KE must be non-negative and EnergySigma and BeamSigma must be greater than zero')
+        config.useBeam = False
+        config.useRealisticBeam = True
+        config.useUniform = False
+        config.useCosmics = False
+        config.ParticleKE = energy
+        config.wallD = wall_distance
+        config.ParticlePosz = -(config.TankRadius - config.wallD)
+        config.EnergySigma = energy_sigma
+        config.BeamSigma = beam_sigma
     if args.uniform:
         config.useBeam = False
         config.useUniform = True
@@ -590,8 +641,11 @@ def main():
         config.ParticleKEHigh = float(vals[1])
     if args.cosmics:
         config.useBeam = False
+        config.useRealisticBeam = False
         config.useUniform = False
         config.useCosmics = True
+    config.savePrimaryParticleTruth = args.save_primary_truth
+    config.saveAllParticleTruth = args.save_all_truth
     if args.nevs is not None:
         config.nevs = args.nevs
     if args.nfiles is not None:

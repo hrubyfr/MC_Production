@@ -18,3 +18,6 @@
 
 # WCSim output
 geofile*.txt
+
+fhruby.cc
+startup.sh
