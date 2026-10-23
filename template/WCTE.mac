@@ -72,6 +72,7 @@ $comsicsmac/mygen/cosmicsfile $wcsimdir/data/WCTE_cosmics.dat
 /WCSimIO/RootFile $filename
 
 /WCSimIO/SaveRooTracker 0
+$savePrimaryTruthMac/WCSimIO/SaveAllParticleTruth false
 $savePrimaryTruthMac/WCSimIO/SavePrimaryParticleTruth true
 $saveAllTruthMac/WCSimIO/SaveAllParticleTruth true
 

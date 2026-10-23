@@ -126,6 +126,21 @@ Access at: `http://localhost:8080`
 
 Root macros located in `validation/` can be run using the container.
 
+### MergeOutputFiles
+Merge all indexed WCSim event files for a configuration suffix into one ROOT file. The geometry (`wcsimGeoT`) and options (`wcsimRootOptionsT`) trees are copied once from the first input. `AllSecondaries` is merged when present in any input.
+
+```bash
+python3 mergeOutputFiles.py '_wCDS_mu-_RealisticBeam_680MeV_0cm_Esigma10MeV_Bsigma2cm__PrimaryTruth'
+```
+
+The default output is `out/wcsim<suffix>_merged.root`. The input directory and output path can be changed with `--input-dir` and `--output`. To use a custom WCSim build, pass the build directory containing `this_wcsim.sh` with `-w`:
+
+```bash
+python3 mergeOutputFiles.py '_wCDS_mu-_RealisticBeam_680MeV_0cm_Esigma10MeV_Bsigma2cm__PrimaryTruth' -w /path/to/WCSim-build/install
+```
+
+The runner uses the software container configured by `setup.sh`, binds the repository at `/mnt`, sources `/opt/entrypoint.sh`, and then sources the selected WCSim setup script.
+
 ### EventDisplay.c
 Aggregates events from files to produce PMT hit histograms (charges and times) in `fig/`.
 ```bash
