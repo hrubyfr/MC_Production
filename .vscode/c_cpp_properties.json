@@ -1,0 +1,18 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/frantisek/Software/root-6.28.10-install/include/**",
+                "/home/frantisek/Software/WCSim/WCSim/include/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/g++-13",
+            "cStandard": "c17",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-clang-x64"
+        }
+    ],
+    "version": 4
+}

@@ -1,0 +1,11 @@
+universe = vanilla
+executable = /bin/bash
+arguments = "$worker"
+should_transfer_files = NO
+output = $output.out
+error = $error.err
+log = $log.log
+request_cpus = $cpus
+request_memory = ${memory}MB
++JobFlavour = "$flavour"
+queue 1

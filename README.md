@@ -61,6 +61,19 @@ python3 runSimulation.py [options]
 | | `--wcsim` | **Disable** WCSim execution step. |
 | | `--mdt` | **Disable** MDT execution step. |
 | | `--fq` | **Disable** fiTQun execution step. |
+| | `--licketyfit PATH` | Enable LicketyFit using the specified checkout on the worker host. |
+| | `--licketyfit-python PATH` | Host Python executable with LicketyFit dependencies installed. Required with `--licketyfit`. |
+| | `--datatools PATH` | DataTools checkout containing `root_utils/event_dump.py`. Required with `--licketyfit`. |
+| | `--lf-particle` | Required fit hypothesis: `muon`, `pion`, `kaon`, or `proton`. |
+| | `--lf-energy-mev` | Required non-negative sample energy label in MeV. |
+| | `--lf-seeding` | `general` (default) or `beam`. |
+| | `--lf-cpus` | Internal threads for one fit process. Default: 1. |
+| | `--lf-memory-mb` | Memory request in MB. Default: 5120. |
+| | `--lf-walltime` | Requested walltime in `HH:MM:SS`. Default: `24:00:00`. |
+| | `--lf-condor-schedd` | HTCondor schedd name. Required for LicketyFit Condor jobs. |
+| | `--confirm-legacy-idle` | Confirm matching legacy jobs have been checked and are no longer active. |
+| | `--adopt-unverified` | Explicitly adopt existing ROOT files without provenance records as unverified. |
+| | `--dry-run` | Generate batch files and show planned submissions without contacting a scheduler. |
 | `-k` | `--sukap` | Submit batch jobs to **Sukap** (Requires Sandbox). Optional agrument: queue name (default: all).|
 | `-d` | `--cedar` | Submit batch jobs to **Cedar** with specified RAP account. |
 | | `--condor` | Submit batch jobs to **HTCondor** (LXPLUS). Optional agrument: JobFlavour (default: tomorrow)|
@@ -95,6 +108,86 @@ python3 runSimulation.py -m -n 1000 -f 50 -d def-myaccount
 python3 runSimulation.py -p mu+ -b 200,0 -n 1000 -f 20 --condor
 ```
 
+### LicketyFit
+
+LicketyFit is opt-in and reconstructs the WCSim ROOT file's built-in digitized
+hits, independently of MDT and fiTQun. Each worker validates the WCSim event
+count and converts that file to NPZ with DataTools inside the container. It then
+runs the supplied LicketyFit checkout using the supplied **host** Python, outside
+the container. The checkout must expose the `scripts/run_wcsim.py` launcher
+interface; its Geometry and analysis_tools submodules must be initialized.
+Before generating files, the selected host Python imports the fitter and its
+dependencies, checks its launcher interface and geometry, and validates the fit
+settings without running a fit. The same Python and checkout must also work on
+the worker; submit-host preflight cannot verify worker-node access.
+
+Install the checkout's Python requirements in a host environment (Python 3.10
+or newer); its native backend also needs a C++17/OpenMP compiler. The production
+directory, checkout, Python environment, DataTools checkout and container image
+must be visible on every worker at the supplied paths. DataTools must be usable
+with the container's ROOT and WCSim environment. Workers also need writable
+scratch/cache storage; completed outputs are published using hard links, so the
+production filesystem must support hard links and advisory file locks.
+
+For example, after sourcing `setup.sh`:
+
+```bash
+python3 runSimulation.py -p mu- -b 100,0 -n 100 -f 2 \
+    --licketyfit /shared/path/LicketyFit --licketyfit-python /shared/path/venv/bin/python \
+    --datatools /shared/path/DataTools --lf-particle muon --lf-energy-mev 100 \
+    --condor tomorrow --lf-condor-schedd YOUR_SCHEDD --dry-run
+```
+
+Remove `--dry-run` only when ready to submit. For CEDAR, replace the Condor
+options with `--cedar ACCOUNT`. To fit existing WCSim output without running
+the other stages, add `--wcsim --mdt --fq`; these options disable the named
+stages. Add `--adopt-unverified` only after independently checking the provenance
+of any unrecorded ROOT inputs. LicketyFit submission on Sukap is disabled until its resource directives
+and job-status handling are verified. The web interface does not expose
+LicketyFit options.
+
+The default 5120 MB request is a starting point, not a measured upper bound:
+conversion and other stages may require more. CEDAR requests at least its
+existing 16000 MB whenever upstream stages are enabled. Increase memory,
+CPUs or walltime after benchmarking representative inputs; one fit process
+uses at most `--lf-cpus` internal threads. For Condor, choose a JobFlavour at
+least as long as `--lf-walltime`; the flavour sets the actual limit. Cold-cache
+compilation can increase startup time and memory.
+
+Results are stored in `lf/` as `.dict` files with JSON completion records
+containing hashes, configuration, source revision and Python package versions.
+Enabled ROOT stages also get `.production.json` validation records alongside
+their outputs. Unrecorded ROOT files are refused unless `--adopt-unverified` is
+supplied. Such inputs are checked on a worker and marked `adopted-unverified`;
+the fit record retains this origin. The check verifies the ROOT tree and event
+count but cannot prove a legacy file's original physics configuration. A stale
+record must be inspected before moving it aside; adopting the file after that
+marks its provenance unverified rather than certifying its original settings.
+Only load trusted `.dict` files: they use pickle. Existing partial or stale
+results are not overwritten. Inspect and move both the result and its JSON
+record before retrying. Submission ledgers in `lf/` prevent automatic
+resubmission of active jobs and block ambiguous outcomes. If reconciliation is
+unavailable, inspect the scheduler and ledger manually; move a ledger aside
+only after confirming the corresponding job cannot still run. Legacy batch
+files have no ledger: check all schedulers before using `--confirm-legacy-idle`.
+For reconstruction-enabled productions, WCSim macro seeds are generated from
+`--seed` and the physical simulation configuration, with duplicate draws
+redrawn. Existing WCSim macros in the same production directory are checked for
+collisions; separate directories or historical outputs without macros cannot be
+checked automatically. Old macros are never overwritten when their seeds do
+not match the new scheme. Increasing `--nfiles` preserves earlier job seeds.
+At most one registered additional reconstruction can be selected per job;
+it remains independent of the existing fiTQun option.
+
+Additional reconstruction algorithms are registered in the shared stage list
+with an enable/configuration attribute, prerequisite, output pattern, worker
+template, source and configuration fingerprint functions, preflight hook, and
+resource attributes. The template must publish its output with a `.json`
+completion record containing the input and output SHA-256 values, fingerprint,
+and event count. The shared dispatcher validates the named WCSim, MDT, or
+fiTQun prerequisite and uses the same scheduler and retry handling. New user
+options still need to populate the stage's configuration attributes.
+
 ## Web Application
 
 A FastAPI-based web interface is available to configure simulations, submit jobs, and monitor status.
@@ -125,6 +218,13 @@ Access at: `http://localhost:8080`
 ## Validation Tools
 
 Root macros located in `validation/` can be run using the container.
+
+The Python tests use NumPy for NPZ fixtures and mock all scheduler submissions:
+
+```bash
+python3 -m pip install numpy
+python3 -m unittest discover -v
+```
 
 ### MergeOutputFiles
 Merge all indexed WCSim event files for a configuration suffix into one ROOT file. The geometry (`wcsimGeoT`) and options (`wcsimRootOptionsT`) trees are copied once from the first input. `AllSecondaries` is merged when present in any input.
